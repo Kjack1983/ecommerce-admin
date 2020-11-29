@@ -5,14 +5,16 @@ const fs =  require('fs');
 const { errorHandler } = require('../helpers/dbErrorHandlers');
 
 exports.productById = (req, res, next, id) => {
-    Product.findById(id).exec((err, product) => {
-        if(err || !product) {
-            return res.status(400).json({
-                error: 'Product not found'
-            });
-        }
-        req.product = product;
-        next();
+    Product.findById(id)
+        .populate('category')
+        .exec((err, product) => {
+            if(err || !product) {
+                return res.status(400).json({
+                    error: 'Product not found'
+                });
+            }
+            req.product = product;
+            next();
     })
 }
 
@@ -23,7 +25,6 @@ exports.read = (req, res) => {
 
 exports.create = (req, res) => {
     let form = new formidable.IncomingForm();
-    console.log('form :>> ', form);
 
     form.keepExtentions = true;
     form.parse(req, (err, fields, files) => {
@@ -140,7 +141,7 @@ exports.update = (req, res) => {
 exports.list = (req, res) => {
     let order = req.query.order ? req.query.order : 'asc';
     let shortBy = req.query.shortBy ? req.query.shortBy : '_id';
-    let limit = req.query.limit ? parseInt(req.query.limit) : 6;
+    let limit = req.query.limit ? parseInt(req.query.limit) : 15;
 
     Product.find()
         .select('-photo') // deselect photo field because of the size and it will be slow.
@@ -164,7 +165,7 @@ exports.list = (req, res) => {
  */
 exports.listRelated = (req, res) => {
     // Set limit parameter ?limit=1
-    let limit = req.query.limit ? parseInt(req.query.limit) : 6;
+    let limit = req.query.limit ? parseInt(req.query.limit) : 15;
 
     /**
      * all the related product but not the current one $ne stands for (not included).
@@ -201,6 +202,39 @@ exports.listCategories = (req, res) => {
     })
 }
 
+exports.listSearch = (req, res) => {
+    // Create query object to hold search and category value.
+
+    const query = {}
+
+    if (req.query.search) {
+
+
+        // assign search value to query.name [@todo check mongodb $regex]
+        query.name = { $regex: req.query.search, $options: 'i' }
+
+        // assign category value to query.value
+        if (req.query.category && req.query.category != 'All') {
+            query.category = req.query.category;
+        }
+
+        // find product based on the two query object with two properties.
+        // Search and category.
+        Product.find(query, (err, products) => {
+            if (err) {
+                return res.status(400).json({
+                    error: errorHandler(err)
+                })
+            }
+
+            // fetch product to the front.
+            res.json(products);
+
+        }).select("-photo")
+    }
+     
+}
+
 /**
  * list products by id
  * we will implement product search  in react frontend
@@ -215,6 +249,7 @@ exports.listBySearch = (req, res) => {
     let skip = parseInt(req.body.skip);
     let findArgs = {};
 
+    
     // console.log(order, sortBy, limit, skip, req.body.filters);
     // console.log("findArgs", findArgs);
  
